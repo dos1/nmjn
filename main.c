@@ -46,7 +46,6 @@ int main (int argc, char** argv) {
 
 	g_object_unref(G_OBJECT(builder));
 
-
 	gtk_widget_show(window);
 	gtk_main();
   return 0;

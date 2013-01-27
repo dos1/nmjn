@@ -7,6 +7,7 @@
 #define MAX_USER_COUNT_PER_SERVER 20
 #define MAX_USER_NAME_LENGTH 16
 #define MAX_ROOM_NAME_LENGTH 16
+#define MAX_USER_LIST_LENGTH 200
 
 #define SEMAPHORE_COUNT 3
 #define SERVER 0
@@ -28,6 +29,7 @@ typedef enum { // typ wiadomości
         MSG_ROOM,
         MSG_PRIVATE,
         MSG_SERVER,
+        MSG_HEARTBEAT_SERVER,
         TERM = 0x7fffffffffffffff // dla ustalenia typu enuma
 } type_t;
 
@@ -55,7 +57,7 @@ typedef struct { // lista użytkowników w danym pokoju
         type_t type;
         struct {
                 unsigned int id;
-                char list[MAX_USER_COUNT_PER_SERVER * MAX_SERVER_COUNT][MAX_USER_NAME_LENGTH];
+                char list[MAX_USER_LIST_LENGTH][MAX_USER_NAME_LENGTH];
         } content;
 } user_list;
 
