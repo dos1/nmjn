@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <!-- interface-requires gtk+ 3.0 -->
+  <object class="GtkListStore" id="liststore1"/>
+  <object class="GtkWindow" id="window1">
+    <property name="can_focus">False</property>
+    <property name="title" translatable="yes">NMJN client</property>
+    <property name="default_width">500</property>
+    <property name="default_height">400</property>
+    <signal name="destroy" handler="on_window_destroy" swapped="no"/>
+    <child>
+      <object class="GtkPaned" id="paned1">
+        <property name="visible">True</property>
+        <property name="can_focus">True</property>
+        <child>
+          <object class="GtkBox" id="box2">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="orientation">vertical</property>
+            <child>
+              <object class="GtkScrolledWindow" id="scrolledwindow1">
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="hscrollbar_policy">never</property>
+                <property name="vscrollbar_policy">always</property>
+                <property name="kinetic_scrolling">False</property>
+                <child>
+                  <object class="GtkTextView" id="textview1">
+                    <property name="visible">True</property>
+                    <property name="can_focus">True</property>
+                    <property name="margin_bottom">15</property>
+                    <property name="editable">False</property>
+                    <property name="wrap_mode">word-char</property>
+                  </object>
+                </child>
+              </object>
+              <packing>
+                <property name="expand">True</property>
+                <property name="fill">True</property>
+                <property name="position">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkEntry" id="entry1">
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="has_focus">True</property>
+                <property name="can_default">True</property>
+                <property name="has_default">True</property>
+                <property name="receives_default">True</property>
+                <property name="invisible_char">●</property>
+                <property name="activates_default">True</property>
+                <property name="caps_lock_warning">False</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="pack_type">end</property>
+                <property name="position">1</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="resize">True</property>
+            <property name="shrink">False</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkScrolledWindow" id="scrolledwindow2">
+            <property name="visible">True</property>
+            <property name="can_focus">True</property>
+            <property name="shadow_type">in</property>
+            <property name="min_content_width">200</property>
+            <child>
+              <object class="GtkTreeView" id="treeview1">
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="model">liststore1</property>
+                <child internal-child="selection">
+                  <object class="GtkTreeSelection" id="treeview-selection1"/>
+                </child>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="resize">False</property>
+            <property name="shrink">False</property>
+          </packing>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>
