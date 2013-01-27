@@ -13,6 +13,8 @@
 #define CLIENT 1
 #define LOG 2
 
+#define LOGFILE "/tmp/czat.log"
+
 #define GLOBAL_ROOM_NAME "global"
 
 typedef enum { // typ wiadomości
