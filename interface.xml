@@ -27,8 +27,7 @@
                 <child>
                   <object class="GtkTextView" id="textview1">
                     <property name="visible">True</property>
-                    <property name="can_focus">True</property>
-                    <property name="margin_bottom">15</property>
+                    <property name="can_focus">False</property>
                     <property name="editable">False</property>
                     <property name="wrap_mode">word-char</property>
                   </object>
@@ -51,6 +50,7 @@
                 <property name="invisible_char">●</property>
                 <property name="activates_default">True</property>
                 <property name="caps_lock_warning">False</property>
+                <signal name="activate" handler="derp" object="textview1" swapped="no"/>
               </object>
               <packing>
                 <property name="expand">False</property>
