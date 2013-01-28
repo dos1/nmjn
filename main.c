@@ -9,17 +9,19 @@ void derp(GtkEntry* object, GtkTextView *user_data) {
 	GtkTextIter iter;
 	const gchar *text;
 
-	text = gtk_entry_get_text (GTK_ENTRY (object));
+	text = gtk_entry_get_text (object);
 
 	if (text[0]==0) return;
 
-	buffer = gtk_text_view_get_buffer (GTK_TEXT_VIEW (user_data));
+	buffer = gtk_text_view_get_buffer (user_data);
 
 	gtk_text_buffer_get_end_iter (buffer, &iter);
-	gtk_text_view_scroll_to_iter (GTK_TEXT_VIEW (user_data), &iter, 0.0, FALSE, 0, 0);
-
-	gtk_text_buffer_insert (buffer, &iter, "\n", -1);
 	gtk_text_buffer_insert (buffer, &iter, text, -1);
+	gtk_text_buffer_insert (buffer, &iter, "\n", -1);
+
+	gtk_text_buffer_get_end_iter (buffer, &iter);
+	gtk_text_view_scroll_to_iter (user_data, &iter, 0.0, FALSE, 0, 0);
+
 	gtk_entry_set_text(object, "");
 }
 
@@ -40,7 +42,7 @@ int main (int argc, char** argv) {
 	gtk_text_buffer_get_end_iter (buffer, &iter);
 	gtk_text_view_scroll_to_iter (GTK_TEXT_VIEW (textview), &iter, 0.0, FALSE, 0, 0);
 
-	gtk_text_buffer_insert (buffer, &iter, "NMJN client 0.666", -1);
+	gtk_text_buffer_insert (buffer, &iter, "NMJN client 0.666\n", -1);
 
 	gtk_builder_connect_signals(builder, NULL);
 
