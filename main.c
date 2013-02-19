@@ -8,6 +8,7 @@
 #include <string.h>
 #include <time.h>
 #include <errno.h>
+#include <glib/gprintf.h>
 
 struct client {
 		int server_queue, client_queue, client_key, server_key;
@@ -21,7 +22,7 @@ void display_line(GtkTextView *textview, const gchar *format, ...) {
 	va_list vl;
 	va_start(vl, format);
 	char text[1024] = {};
-	vsprintf(text, format, vl);
+	g_vsnprintf(text, 1024, format, vl);
 	va_end(vl);
 
 	if (text[0]==0) return;
