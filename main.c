@@ -105,6 +105,11 @@ int server_connect(int key, gchar *nick) {
 }
 
 void leave() {
+	if (cl.server_key==-1) {
+		display_line(cl.textview, "Not connected.");
+		return;
+	}
+
 	compact_message msg;
 	msg.type=MSG_LEAVE;
 	msg.content.value = cl.client_key;
@@ -113,6 +118,11 @@ void leave() {
 }
 
 void join(const gchar *room) {
+	if (cl.server_key==-1) {
+		display_line(cl.textview, "Not connected.");
+		return;
+	}
+
 	standard_message msg;
 	msg.type=MSG_JOIN;
 	strcpy(msg.content.sender, "dos");
@@ -151,6 +161,9 @@ void derp(GtkEntry* object, GtkTextView *user_data) {
 			leave();
 		} else if (g_strcmp0(args[0], "/help")==0) {
 			display_line(user_data, "No help for you, silly pants!");
+		} else if (g_strcmp0(args[0], "/quit")==0) {
+			server_disconnect();
+			gtk_main_quit();
 		} else {
 			display_line(user_data, "Invalid command. Type /help to show list of possible commands.");
 		}
