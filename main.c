@@ -153,6 +153,21 @@ void kick(const gchar *who) {
 	msgsnd(cl.server_queue, &msg, sizeof(standard_message), IPC_NOWAIT);
 }
 
+
+void invite(const gchar *who) {
+	if (cl.server_key==-1) {
+		display_line(cl.textview, "Not connected.");
+		return;
+	}
+
+	standard_message msg;
+	msg.type=MSG_JOIN;
+	strcpy(msg.content.sender, who);
+	strcpy(msg.content.message, cl.room);
+	display_line(cl.textview, "Taking %s with force... I mean, inviting.", who);
+	msgsnd(cl.server_queue, &msg, sizeof(standard_message), IPC_NOWAIT);
+}
+
 void send_msg(const gchar *text) {
 	if (cl.server_key==-1) {
 		display_line(cl.textview, "Not connected.");
@@ -219,6 +234,9 @@ void derp(GtkEntry* object, GtkTextView *user_data) {
 		} else if (g_strcmp0(args[0], "/kick")==0) {
 			if (g_strv_length(args)>1) kick(args[1]);
 			else display_line(user_data, "Not enough parameters.");
+		} else if (g_strcmp0(args[0], "/invite")==0) {
+			if (g_strv_length(args)>1) invite(args[1]);
+			else display_line(user_data, "Not enough parameters.");
 		} else if (g_strcmp0(args[0], "/leave")==0) {
 			leave();
 		} else if (g_strcmp0(args[0], "/msg")==0) {
@@ -236,7 +254,8 @@ void derp(GtkEntry* object, GtkTextView *user_data) {
 			display_line(user_data, "/disconnect - disconnects from currently connected server");
 			display_line(user_data, "/join CHANNEL - joins to specified channel");
 			display_line(user_data, "/leave - leaves current channel and joins global channel");
-			display_line(user_data, "/kick NICKNAME - kicks NICKNAME from his current channel");
+			display_line(user_data, "/invite NICKNAME - (forcefully) joins NICKNAME to your current channel");
+			display_line(user_data, "/kick NICKNAME - (forcefully) kicks NICKNAME from his current channel to global");
 			display_line(user_data, "/msg NICKNAME MESSAGE - sends private message MESSAGE to user NICKNAME");
 			display_line(user_data, "/help - shows this information");
 			display_line(user_data, "/quit - turns off the application");
@@ -273,7 +292,7 @@ static gboolean idle(gpointer data) {
 			display_line(cl.textview, "Registered as %s", compact->content.sender);
 			g_free(cl.room);
 			cl.room = g_strdup(GLOBAL_ROOM_NAME);
-			display_line(cl.textview, "You're now in %s room.", cl.room);
+			display_line(cl.textview, "You're now in room \"%s\".", cl.room);
 		} else if (compact->content.value==-1) {
 			//nick exists
 			display_line(cl.textview, "Login taken.");
@@ -289,7 +308,7 @@ static gboolean idle(gpointer data) {
 		//JOIN
 		if (compact->content.value==0) {
 			//OK
-			display_line(cl.textview, "You're now in %s room.", cl.room);
+			display_line(cl.textview, "You're now in room \"%s\".", cl.room);
 		} else if (compact->content.value!=0) {
 			//nick exists
 			display_line(cl.textview, "Something bad has happened [join].");
@@ -298,7 +317,7 @@ static gboolean idle(gpointer data) {
 		//LEAVE
 		if (compact->content.value==0) {
 			//OK
-			display_line(cl.textview, "You're now in %s room.", cl.room);
+			display_line(cl.textview, "You're now in room \"%s\".", cl.room);
 		} else if (compact->content.value!=0) {
 			//nick exists
 			display_line(cl.textview, "Something bad has happened [leave].");
