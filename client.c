@@ -334,7 +334,7 @@ void derp(GtkEntry* object, GtkTextView *user_data) {
 
 		g_strfreev(set);
 	} else {
-		send_msg(text);
+		if (text[0]!=0) send_msg(text);
 	}
 
 	gtk_entry_set_text(object, "");
