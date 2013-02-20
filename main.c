@@ -319,8 +319,8 @@ void derp(GtkEntry* object, GtkTextView *user_data) {
 			display_line(user_data, "/disconnect - disconnects from currently connected server");
 			display_line(user_data, "/join CHANNEL - joins to specified channel");
 			display_line(user_data, "/leave - leaves current channel and joins global channel");
-			display_line(user_data, "/invite NICKNAME - (forcefully) joins NICKNAME to your current channel");
-			display_line(user_data, "/kick NICKNAME - (forcefully) kicks NICKNAME from his current channel to global");
+			display_line(user_data, "/invite NICKNAME - (forcefully) joins NICKNAME to your current channel [works only on certain clients]");
+			display_line(user_data, "/kick NICKNAME - (forcefully) kicks NICKNAME from his current channel to global [works only on certain clients]");
 			display_line(user_data, "/msg NICKNAME MESSAGE - sends private message MESSAGE to user NICKNAME");
 			display_line(user_data, "/help - shows this information");
 			display_line(user_data, "/quit - turns off the application");
