@@ -154,9 +154,6 @@ int server_connect(int key, gchar *nick) {
 
 	cl.nick = g_strdup(nick);
 
-	update_list(NULL);
-	g_timeout_add_seconds(3, update_list, NULL);
-
 	return 0;
 }
 
@@ -360,6 +357,10 @@ static gboolean idle(gpointer data) {
 			g_free(cl.room);
 			cl.room = g_strdup(GLOBAL_ROOM_NAME);
 			display_line(cl.textview, "You're now in room \"%s\".", cl.room);
+
+			update_list(NULL);
+			g_timeout_add_seconds(3, update_list, NULL);
+
 		} else if (compact->content.value==-1) {
 			//nick exists
 			display_line(cl.textview, "Login taken.");

@@ -23,3 +23,4 @@ SET(SRC_SERVER_LIST server.c)
 add_executable(nmjn-server ${SRC_SERVER_LIST})
 
 target_link_libraries(nmjn ${GTK3_LIBRARIES})
+target_link_libraries(nmjn-server -lglib-2.0)
