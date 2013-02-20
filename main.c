@@ -322,6 +322,7 @@ void derp(GtkEntry* object, GtkTextView *user_data) {
 			display_line(user_data, "/invite NICKNAME - (forcefully) joins NICKNAME to your current channel [works only on certain clients]");
 			display_line(user_data, "/kick NICKNAME - (forcefully) kicks NICKNAME from his current channel to global [works only on certain clients]");
 			display_line(user_data, "/msg NICKNAME MESSAGE - sends private message MESSAGE to user NICKNAME");
+			display_line(user_data, "/list - manually forces user list to update");
 			display_line(user_data, "/help - shows this information");
 			display_line(user_data, "/quit - turns off the application");
 		} else if (g_strcmp0(args[0], "/quit")==0) {
