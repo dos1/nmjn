@@ -141,7 +141,7 @@ void server_disconnect() {
 }
 
 int server_connect(int key, gchar *nick) {
-	if (cl.server_key==-1) {
+	if (cl.server_key!=-1) {
 		server_disconnect();
 	}
 	cl.client_queue = get_key(42);
