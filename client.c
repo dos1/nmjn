@@ -130,6 +130,7 @@ void server_disconnect() {
 	g_free(cl.nick);
 	g_free(cl.room);
 	cl.nick = cl.room = NULL;
+	init_list(cl.tree);
 }
 
 int server_connect(int key, gchar *nick) {
