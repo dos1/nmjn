@@ -118,6 +118,13 @@ int get_key(int key) {
 
 void server_disconnect() {
 	if (cl.server_key!=-1) {
+
+		compact_message msg;
+		msg.type = MSG_UNREGISTER;
+		strcpy(msg.content.sender, cl.nick);
+		msg.content.value = cl.client_key;
+		msgsnd(cl.server_queue, &msg, sizeof(compact_message), IPC_NOWAIT);
+
 		int ret = msgctl(cl.client_queue, IPC_RMID, NULL);
 		if (ret!=0) {
 			display_line(cl.textview, "Could not remove message queue: %s", strerror(errno));
@@ -148,7 +155,6 @@ int server_connect(int key, gchar *nick) {
 
 	compact_message msg;
 	msg.type = MSG_REGISTER;
-	msg.content.id = 1;
 	strcpy(msg.content.sender, nick);
 	msg.content.value = cl.client_key;
 	msgsnd(cl.server_queue, &msg, sizeof(compact_message), IPC_NOWAIT);
