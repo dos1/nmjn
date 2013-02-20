@@ -15,6 +15,7 @@ struct client {
 		GtkTextView *textview;
 		GtkEntry* entry;
 		gchar *nick;
+		gchar *room;
 } cl;
 
 
@@ -77,6 +78,9 @@ void server_disconnect() {
 	} else {
 		display_line(cl.textview, "Not connected.");
 	}
+	g_free(cl.nick);
+	g_free(cl.room);
+	cl.nick = cl.room = NULL;
 }
 
 int server_connect(int key, gchar *nick) {
@@ -115,6 +119,8 @@ void leave() {
 	msg.content.value = cl.client_key;
 	display_line(cl.textview, "Leaving current room...");
 	msgsnd(cl.server_queue, &msg, sizeof(compact_message), IPC_NOWAIT);
+	g_free(cl.room);
+	cl.room = g_strdup(GLOBAL_ROOM_NAME);
 }
 
 void join(const gchar *room) {
@@ -125,9 +131,62 @@ void join(const gchar *room) {
 
 	standard_message msg;
 	msg.type=MSG_JOIN;
-	strcpy(msg.content.sender, "dos");
+	strcpy(msg.content.sender, cl.nick);
 	strcpy(msg.content.message, room);
 	display_line(cl.textview, "Attempting to join %s...", room);
+	msgsnd(cl.server_queue, &msg, sizeof(standard_message), IPC_NOWAIT);
+	g_free(cl.room);
+	cl.room = g_strdup(room);
+}
+
+void kick(const gchar *who) {
+	if (cl.server_key==-1) {
+		display_line(cl.textview, "Not connected.");
+		return;
+	}
+
+	standard_message msg;
+	msg.type=MSG_JOIN;
+	strcpy(msg.content.sender, who);
+	strcpy(msg.content.message, GLOBAL_ROOM_NAME);
+	display_line(cl.textview, "Kicking %s... Muahahahaha.", who);
+	msgsnd(cl.server_queue, &msg, sizeof(standard_message), IPC_NOWAIT);
+}
+
+void send_msg(const gchar *text) {
+	if (cl.server_key==-1) {
+		display_line(cl.textview, "Not connected.");
+		return;
+	}
+	if (!cl.room) {
+		display_line(cl.textview, "Not registered.");
+		return;
+	}
+
+	standard_message msg;
+	msg.type=MSG_ROOM;
+	strcpy(msg.content.sender, cl.nick);
+	strcpy(msg.content.recipient, cl.room);
+	msg.content.send_date = time(NULL);
+	strcpy(msg.content.message, text);
+	display_line(cl.textview, "<%s> %s", cl.nick, text);
+
+	msgsnd(cl.server_queue, &msg, sizeof(standard_message), IPC_NOWAIT);
+}
+
+void send_priv(const gchar *to, const gchar *text) {
+	if (cl.server_key==-1) {
+		display_line(cl.textview, "Not connected.");
+		return;
+	}
+
+	standard_message msg;
+	msg.type=MSG_PRIVATE;
+	strcpy(msg.content.sender, cl.nick);
+	strcpy(msg.content.recipient, to);
+	strcpy(msg.content.message, text);
+	display_line(cl.textview, "%s -> %s: %s", cl.nick, to, text);
+
 	msgsnd(cl.server_queue, &msg, sizeof(standard_message), IPC_NOWAIT);
 }
 
@@ -157,10 +216,30 @@ void derp(GtkEntry* object, GtkTextView *user_data) {
 		} else if (g_strcmp0(args[0], "/join")==0) {
 			if (g_strv_length(args)>1) join(args[1]);
 			else display_line(user_data, "Not enough parameters.");
+		} else if (g_strcmp0(args[0], "/kick")==0) {
+			if (g_strv_length(args)>1) kick(args[1]);
+			else display_line(user_data, "Not enough parameters.");
 		} else if (g_strcmp0(args[0], "/leave")==0) {
 			leave();
+		} else if (g_strcmp0(args[0], "/msg")==0) {
+			if (g_strv_length(args)>2) {
+				gchar *to = args[1], *text;
+				gchar **msg = set;
+				while (*msg != to) msg++;
+				msg++;
+				text = g_strjoinv(" ", msg);
+				send_priv(to, text);
+				g_free(text);
+			} else display_line(user_data, "Not enough parameters.");
 		} else if (g_strcmp0(args[0], "/help")==0) {
-			display_line(user_data, "No help for you, silly pants!");
+			display_line(user_data, "/connect SERVER_KEY NICKNAME - connects to server with specified server key and registers with specified nickname");
+			display_line(user_data, "/disconnect - disconnects from currently connected server");
+			display_line(user_data, "/join CHANNEL - joins to specified channel");
+			display_line(user_data, "/leave - leaves current channel and joins global channel");
+			display_line(user_data, "/kick NICKNAME - kicks NICKNAME from his current channel");
+			display_line(user_data, "/msg NICKNAME MESSAGE - sends private message MESSAGE to user NICKNAME");
+			display_line(user_data, "/help - shows this information");
+			display_line(user_data, "/quit - turns off the application");
 		} else if (g_strcmp0(args[0], "/quit")==0) {
 			server_disconnect();
 			gtk_main_quit();
@@ -170,15 +249,17 @@ void derp(GtkEntry* object, GtkTextView *user_data) {
 
 		g_strfreev(set);
 	} else {
-		display_line(user_data, "%s", text);
+		send_msg(text);
 	}
 
 	gtk_entry_set_text(object, "");
 }
 
 static gboolean idle(gpointer data) {
-	compact_message *compact = g_malloc(sizeof(compact_message));
-	standard_message *standard = g_malloc(sizeof(standard_message));
+	compact_message *compact = g_malloc(sizeof(compact_message)+50);
+	standard_message *standard = g_malloc(sizeof(standard_message)+50);
+
+
 	if (msgrcv(cl.client_queue, compact, sizeof(compact_message), MSG_HEARTBEAT, IPC_NOWAIT)!=-1) {
 		//HEARTBEAT
 		g_print("puk puk %i\n", compact->content.id);
@@ -190,8 +271,9 @@ static gboolean idle(gpointer data) {
 		if (compact->content.value==0) {
 			//OK
 			display_line(cl.textview, "Registered as %s", compact->content.sender);
-			display_line(cl.textview, "You're now in global room.");
-
+			g_free(cl.room);
+			cl.room = g_strdup(GLOBAL_ROOM_NAME);
+			display_line(cl.textview, "You're now in %s room.", cl.room);
 		} else if (compact->content.value==-1) {
 			//nick exists
 			display_line(cl.textview, "Login taken.");
@@ -207,7 +289,7 @@ static gboolean idle(gpointer data) {
 		//JOIN
 		if (compact->content.value==0) {
 			//OK
-			display_line(cl.textview, "You're now in selected room.");
+			display_line(cl.textview, "You're now in %s room.", cl.room);
 		} else if (compact->content.value!=0) {
 			//nick exists
 			display_line(cl.textview, "Something bad has happened [join].");
@@ -216,14 +298,17 @@ static gboolean idle(gpointer data) {
 		//LEAVE
 		if (compact->content.value==0) {
 			//OK
-			display_line(cl.textview, "You're now in global room.");
+			display_line(cl.textview, "You're now in %s room.", cl.room);
 		} else if (compact->content.value!=0) {
 			//nick exists
 			display_line(cl.textview, "Something bad has happened [leave].");
 		}
-	}	else if (msgrcv(cl.client_queue, standard, sizeof(standard_message), 888, IPC_NOWAIT)!=-1) {
-		g_print("standard type: %lu, content.sender: %s\n", standard->type, standard->content.sender);
+	}	else if (msgrcv(cl.client_queue, standard, sizeof(standard_message), MSG_ROOM, IPC_NOWAIT)!=-1) {
+		display_line(cl.textview, "<%s> %s", standard->content.sender, standard->content.message);
+	}	else if (msgrcv(cl.client_queue, standard, sizeof(standard_message), MSG_PRIVATE, IPC_NOWAIT)!=-1) {
+		display_line(cl.textview, "-> %s: %s", standard->content.sender, standard->content.message);
 	} //TODO: rest of message types
+
 	g_free(compact);
 	g_free(standard);
 	return TRUE;
@@ -237,6 +322,7 @@ void on_window_destroy (GObject* object, gpointer user_data) {
 int main (int argc, char** argv) {
 
 	cl.client_key = cl.client_queue = cl.server_key = cl.server_queue = -1;
+	cl.nick = cl.room = NULL;
 
 	gtk_init(&argc, &argv);
 
