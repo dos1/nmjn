@@ -13,10 +13,46 @@
 struct client {
 		int server_queue, client_queue, client_key, server_key;
 		GtkTextView *textview;
-		GtkEntry* entry;
+		GtkEntry *entry;
+		GtkTreeView *tree;
 		gchar *nick;
 		gchar *room;
 } cl;
+
+
+static void init_list(GtkTreeView *list) {
+
+	GtkListStore *store;
+
+		GtkTreeModel *model;
+		GtkTreeIter  iter;
+
+
+		store = GTK_LIST_STORE(gtk_tree_view_get_model(
+				GTK_TREE_VIEW (list)));
+		model = gtk_tree_view_get_model (GTK_TREE_VIEW (list));
+
+		if (gtk_tree_model_get_iter_first(model, &iter) == FALSE) gtk_list_store_clear(store);
+
+
+	store = gtk_list_store_new(1, G_TYPE_STRING);
+
+	gtk_tree_view_set_model(GTK_TREE_VIEW(list),
+			GTK_TREE_MODEL(store));
+
+	g_object_unref(store);
+}
+
+static void add_to_list(GtkTreeView *list, const gchar *str) {
+	GtkListStore *store;
+	GtkTreeIter iter;
+
+	store = GTK_LIST_STORE(gtk_tree_view_get_model
+			(GTK_TREE_VIEW(list)));
+
+	gtk_list_store_append(store, &iter);
+	gtk_list_store_set(store, &iter, 0, str, -1);
+}
 
 
 void display_line(GtkTextView *textview, const gchar *format, ...) {
@@ -54,6 +90,19 @@ void display_line(GtkTextView *textview, const gchar *format, ...) {
 
 }
 
+
+gboolean update_list(gpointer user_data) {
+	if (cl.server_key==-1) {
+		return FALSE;
+	}
+
+	compact_message msg;
+	msg.type=MSG_LIST;
+	msg.content.value = cl.client_key;
+	strcpy(msg.content.sender, cl.nick);
+	msgsnd(cl.server_queue, &msg, sizeof(compact_message), IPC_NOWAIT);
+	return TRUE;
+}
 
 int get_key(int key) {
 	int qid = -1;
@@ -105,6 +154,9 @@ int server_connect(int key, gchar *nick) {
 
 	cl.nick = g_strdup(nick);
 
+	update_list(NULL);
+	g_timeout_add_seconds(3, update_list, NULL);
+
 	return 0;
 }
 
@@ -121,6 +173,9 @@ void leave() {
 	msgsnd(cl.server_queue, &msg, sizeof(compact_message), IPC_NOWAIT);
 	g_free(cl.room);
 	cl.room = g_strdup(GLOBAL_ROOM_NAME);
+
+	update_list(NULL);
+
 }
 
 void join(const gchar *room) {
@@ -137,6 +192,8 @@ void join(const gchar *room) {
 	msgsnd(cl.server_queue, &msg, sizeof(standard_message), IPC_NOWAIT);
 	g_free(cl.room);
 	cl.room = g_strdup(room);
+
+	update_list(NULL);
 }
 
 void kick(const gchar *who) {
@@ -151,6 +208,9 @@ void kick(const gchar *who) {
 	strcpy(msg.content.message, GLOBAL_ROOM_NAME);
 	display_line(cl.textview, "Kicking %s... Muahahahaha.", who);
 	msgsnd(cl.server_queue, &msg, sizeof(standard_message), IPC_NOWAIT);
+
+	update_list(NULL);
+
 }
 
 
@@ -166,6 +226,9 @@ void invite(const gchar *who) {
 	strcpy(msg.content.message, cl.room);
 	display_line(cl.textview, "Taking %s with force... I mean, inviting.", who);
 	msgsnd(cl.server_queue, &msg, sizeof(standard_message), IPC_NOWAIT);
+
+	update_list(NULL);
+
 }
 
 void send_msg(const gchar *text) {
@@ -205,6 +268,7 @@ void send_priv(const gchar *to, const gchar *text) {
 	msgsnd(cl.server_queue, &msg, sizeof(standard_message), IPC_NOWAIT);
 }
 
+
 void derp(GtkEntry* object, GtkTextView *user_data) {
 	const gchar *text;
 
@@ -215,7 +279,6 @@ void derp(GtkEntry* object, GtkTextView *user_data) {
 		gchar *args[g_strv_length(set)]; int i=0;
 		while (*temp != NULL) {
 			if (**temp!=0) {
-				//g_print("%s\n", *temp);
 				args[i]=*temp;
 				i++;
 			}
@@ -239,6 +302,8 @@ void derp(GtkEntry* object, GtkTextView *user_data) {
 			else display_line(user_data, "Not enough parameters.");
 		} else if (g_strcmp0(args[0], "/leave")==0) {
 			leave();
+		} else if (g_strcmp0(args[0], "/list")==0) {
+			update_list(NULL);
 		} else if (g_strcmp0(args[0], "/msg")==0) {
 			if (g_strv_length(args)>2) {
 				gchar *to = args[1], *text;
@@ -277,11 +342,12 @@ void derp(GtkEntry* object, GtkTextView *user_data) {
 static gboolean idle(gpointer data) {
 	compact_message *compact = g_malloc(sizeof(compact_message)+50);
 	standard_message *standard = g_malloc(sizeof(standard_message)+50);
-
+	user_list *list = g_malloc(sizeof(user_list)+50);
+	// +50 thanks to amazing idea of passing sizeof(whole_structure) to message queues, segfaults seemed to like that!
 
 	if (msgrcv(cl.client_queue, compact, sizeof(compact_message), MSG_HEARTBEAT, IPC_NOWAIT)!=-1) {
 		//HEARTBEAT
-		g_print("puk puk %i\n", compact->content.id);
+		//g_print("puk puk %i\n", compact->content.id);
 		compact->content.value = cl.client_key;
 		msgsnd(cl.server_queue, compact, sizeof(compact_message), IPC_NOWAIT);
 	} else if (msgrcv(cl.client_queue, compact, sizeof(compact_message), MSG_REGISTER, IPC_NOWAIT)!=-1) {
@@ -310,7 +376,6 @@ static gboolean idle(gpointer data) {
 			//OK
 			display_line(cl.textview, "You're now in room \"%s\".", cl.room);
 		} else if (compact->content.value!=0) {
-			//nick exists
 			display_line(cl.textview, "Something bad has happened [join].");
 		}
 	} else if (msgrcv(cl.client_queue, compact, sizeof(compact_message), MSG_LEAVE, IPC_NOWAIT)!=-1) {
@@ -319,19 +384,26 @@ static gboolean idle(gpointer data) {
 			//OK
 			display_line(cl.textview, "You're now in room \"%s\".", cl.room);
 		} else if (compact->content.value!=0) {
-			//nick exists
 			display_line(cl.textview, "Something bad has happened [leave].");
 		}
 	}	else if (msgrcv(cl.client_queue, standard, sizeof(standard_message), MSG_ROOM, IPC_NOWAIT)!=-1) {
 		display_line(cl.textview, "<%s> %s", standard->content.sender, standard->content.message);
 	}	else if (msgrcv(cl.client_queue, standard, sizeof(standard_message), MSG_PRIVATE, IPC_NOWAIT)!=-1) {
 		display_line(cl.textview, "-> %s: %s", standard->content.sender, standard->content.message);
-	} //TODO: rest of message types
+	}	else if (msgrcv(cl.client_queue, list, sizeof(user_list), MSG_LIST, IPC_NOWAIT)!=-1) {
+		init_list(cl.tree);
+		int i;
+		for (i=0; i<MAX_USER_LIST_LENGTH; i++) {
+			if (list->content.list[i][0]!=0) add_to_list(cl.tree, list->content.list[i]);
+		}
+	}
 
 	g_free(compact);
 	g_free(standard);
+	g_free(list);
 	return TRUE;
 }
+
 
 void on_window_destroy (GObject* object, gpointer user_data) {
 		server_disconnect();
@@ -352,6 +424,7 @@ int main (int argc, char** argv) {
 	window = GTK_WIDGET(gtk_builder_get_object(builder, "window1"));
 
 	GtkTextView* textview = GTK_TEXT_VIEW(gtk_builder_get_object(builder, "textview1"));
+	GtkTreeView *tree = GTK_TREE_VIEW(gtk_builder_get_object(builder, "treeview1"));
 	GtkTextBuffer *buffer;
 	GtkTextIter iter;
 
@@ -363,6 +436,17 @@ int main (int argc, char** argv) {
 
 	cl.textview = textview;
 	cl.entry = GTK_ENTRY(gtk_builder_get_object(builder, "entry1"));
+	cl.tree = tree;
+
+	GtkCellRenderer *renderer;
+	GtkTreeViewColumn *column;
+
+	renderer = gtk_cell_renderer_text_new();
+	column = gtk_tree_view_column_new_with_attributes("Users in current room",
+					renderer, "text", 0, NULL);
+	gtk_tree_view_append_column(GTK_TREE_VIEW(tree), column);
+
+	init_list(tree);
 
 	gtk_builder_connect_signals(builder, NULL);
 
