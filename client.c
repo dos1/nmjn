@@ -141,6 +141,9 @@ void server_disconnect() {
 }
 
 int server_connect(int key, gchar *nick) {
+	if (cl.server_key==-1) {
+		server_disconnect();
+	}
 	cl.client_queue = get_key(42);
 	cl.server_key = key;
 	display_line(cl.textview, "Trying to connect to server %d...", cl.server_key);
