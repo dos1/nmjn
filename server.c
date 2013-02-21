@@ -197,15 +197,17 @@ static gboolean process(gpointer data) {
 			strcpy(sv.repo->clients[pos].room, GLOBAL_ROOM_NAME);
 			log_line("User registered!");
 		}
-		v(sv.sem_id, CLIENT);
 
 		int client = msgget(compact->content.value, 0777);
 		compact->content.value = error;
 		msgsnd(client, compact, sizeof(compact_message), IPC_NOWAIT);
 
-		compact->content.value = -1;
+		compact->content.value = sv.msg_key;
 		compact->type=MSG_HEARTBEAT;
+		sv.heartbeats[pos]=TRUE;
 		msgsnd(client, compact, sizeof(compact_message), IPC_NOWAIT);
+		g_print("Sent initial heartbeat to user %s (%d)\n", sv.repo->clients[pos].name, sv.repo->clients[pos].queue_key);
+		v(sv.sem_id, CLIENT);
 
 	}	else if( msgrcv(sv.msg_id, compact, sizeof(compact_message), MSG_UNREGISTER, IPC_NOWAIT) != -1 ) {
 		log_line("Got deregister request...");
@@ -317,17 +319,17 @@ static gboolean process(gpointer data) {
 
 		v(sv.sem_id, CLIENT);
 	}	else if( msgrcv(sv.msg_id, compact, sizeof(compact_message), MSG_HEARTBEAT, IPC_NOWAIT) != -1 ) {
-		g_print("Heartbeat from user %d\n", compact->content.value);
 		p(sv.sem_id, CLIENT);
 		int user = getClient(compact->content.value);
+		g_print("Heartbeat from user %d [%d]\n", compact->content.value, user);
 		v(sv.sem_id, CLIENT);
 		if (user!=-1) {
 			sv.heartbeats[user]=TRUE;
 		}
 	}	else if( msgrcv(sv.msg_id, compact, sizeof(compact_message), MSG_HEARTBEAT_SERVER, IPC_NOWAIT) != -1 ) {
-		g_print("Heartbeat from server %d\n", compact->content.value);
 		p(sv.sem_id, SERVER);
 		int s = getServer(compact->content.value);
+		g_print("Heartbeat from server %d [%d]\n", compact->content.value, s);
 		v(sv.sem_id, SERVER);
 		sv.heartbeats_servers[s]=TRUE;
 		if (s!=-1) {
@@ -561,10 +563,11 @@ gboolean heartbeat(gpointer data) {
 			} else {
 				sv.heartbeats[i]=FALSE;
 				compact_message compact;
-				compact.content.value = -1;
+				compact.content.value = sv.msg_key;
 				compact.type=MSG_HEARTBEAT;
 				int client = msgget(sv.repo->clients[i].queue_key, 0777);
 				msgsnd(client, &compact, sizeof(compact_message), IPC_NOWAIT);
+				g_print("Sent heartbeat to user %s (%d)\n", sv.repo->clients[i].name, sv.repo->clients[i].queue_key);
 			}
 		}
 		i++;
