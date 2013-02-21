@@ -206,7 +206,7 @@ static gboolean process(gpointer data) {
 		compact->type=MSG_HEARTBEAT;
 		sv.heartbeats[pos]=TRUE;
 		msgsnd(client, compact, sizeof(compact_message), IPC_NOWAIT);
-		g_print("Sent initial heartbeat to user %s (%d)\n", sv.repo->clients[pos].name, sv.repo->clients[pos].queue_key);
+		//g_print("Sent initial heartbeat to user %s (%d)\n", sv.repo->clients[pos].name, sv.repo->clients[pos].queue_key);
 		v(sv.sem_id, CLIENT);
 
 	}	else if( msgrcv(sv.msg_id, compact, sizeof(compact_message), MSG_UNREGISTER, IPC_NOWAIT) != -1 ) {
@@ -321,7 +321,7 @@ static gboolean process(gpointer data) {
 	}	else if( msgrcv(sv.msg_id, compact, sizeof(compact_message), MSG_HEARTBEAT, IPC_NOWAIT) != -1 ) {
 		p(sv.sem_id, CLIENT);
 		int user = getClient(compact->content.value);
-		g_print("Heartbeat from user %d [%d]\n", compact->content.value, user);
+		//g_print("Heartbeat from user %d [%d]\n", compact->content.value, user);
 		v(sv.sem_id, CLIENT);
 		if (user!=-1) {
 			sv.heartbeats[user]=TRUE;
@@ -329,14 +329,9 @@ static gboolean process(gpointer data) {
 	}	else if( msgrcv(sv.msg_id, compact, sizeof(compact_message), MSG_HEARTBEAT_SERVER, IPC_NOWAIT) != -1 ) {
 		p(sv.sem_id, SERVER);
 		int s = getServer(compact->content.value);
-		g_print("Heartbeat from server %d [%d]\n", compact->content.value, s);
+		//g_print("Heartbeat from server %d [%d]\n", compact->content.value, s);
 		v(sv.sem_id, SERVER);
 		sv.heartbeats_servers[s]=TRUE;
-		if (s!=-1) {
-			int serv = msgget(compact->content.value, 0777);
-			compact->content.value=sv.msg_key;
-			msgsnd(serv, compact, sizeof(compact_message), IPC_NOWAIT);
-		}
 	}	else if( msgrcv(sv.msg_id, server, sizeof(server_message), MSG_SERVER, IPC_NOWAIT) != -1 ) {
 
 		standard_message standard = server->content.msg;
@@ -532,7 +527,7 @@ gboolean heartbeat(gpointer data) {
 	p(sv.sem_id, SERVER);
 	while (i<MAX_SERVER_COUNT) {
 		if ((sv.repo->servers[i].queue_key!=-1) && (sv.repo->servers[i].queue_key!=sv.msg_key)) {
-			if (sv.heartbeats_servers[i]==FALSE) {
+			if (sv.heartbeats_servers[i]==-2) { // ugly workaround for some buggy servers around here
 				log_line("Server %d does not respond to heartbeats!", i);
 				p(sv.sem_id, CLIENT);
 				int j=0;
@@ -545,8 +540,15 @@ gboolean heartbeat(gpointer data) {
 				v(sv.sem_id, CLIENT);
 				sv.repo->servers[i].queue_key=-1;
 				log_line("Deleted server %d.", i);
+				sv.heartbeats_servers[i]=TRUE;
 			} else {
-				sv.heartbeats_servers[i]=FALSE;
+				sv.heartbeats_servers[i]--;
+				compact_message compact;
+				compact.content.value = sv.msg_key;
+				compact.type=MSG_HEARTBEAT_SERVER;
+				int s = msgget(sv.repo->servers[i].queue_key, 0777);
+				msgsnd(s, &compact, sizeof(compact_message), IPC_NOWAIT);
+				//g_print("Sent heartbeat to server %d\n", sv.repo->servers[i].queue_key);
 			}
 		}
 		i++;
@@ -560,6 +562,7 @@ gboolean heartbeat(gpointer data) {
 			if (sv.heartbeats[i]==FALSE) {
 				log_line("Client %d does not respond to heartbeats!", i);
 				deregister(i);
+				sv.heartbeats[i]=TRUE;
 			} else {
 				sv.heartbeats[i]=FALSE;
 				compact_message compact;
@@ -567,7 +570,7 @@ gboolean heartbeat(gpointer data) {
 				compact.type=MSG_HEARTBEAT;
 				int client = msgget(sv.repo->clients[i].queue_key, 0777);
 				msgsnd(client, &compact, sizeof(compact_message), IPC_NOWAIT);
-				g_print("Sent heartbeat to user %s (%d)\n", sv.repo->clients[i].name, sv.repo->clients[i].queue_key);
+				//g_print("Sent heartbeat to user %s (%d)\n", sv.repo->clients[i].name, sv.repo->clients[i].queue_key);
 			}
 		}
 		i++;
@@ -598,7 +601,7 @@ int main(int argc, char** argv){
 	if (connection_setup()) return 1;
 
 	g_idle_add(process, NULL);
-	g_timeout_add_seconds(5, heartbeat, NULL);
+	g_timeout_add_seconds(2, heartbeat, NULL);
 	g_unix_signal_add(SIGINT, quit, NULL);
 	g_main_loop_run(sv.loop);
 
