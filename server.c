@@ -291,11 +291,11 @@ static gboolean process(gpointer data) {
 		if ((user!=-1) && (user2!=-1)) {
 			if (sv.repo->clients[user].server_queue_key == sv.msg_key) {
 				log_line("Sending PM from %s to %s", standard->content.sender, standard->content.recipient);
-				int client = msgget(sv.repo->clients[user].queue_key, 0777);
+				int client = msgget(sv.repo->clients[user2].queue_key, 0777);
 				msgsnd(client, standard, sizeof(standard_message), IPC_NOWAIT);
 			} else {
 				log_line("Sending PM from %s to %s on server %d", standard->content.sender, standard->content.recipient, sv.repo->clients[user].server_queue_key);
-				int serv = msgget(sv.repo->clients[user].server_queue_key, 0777);
+				int serv = msgget(sv.repo->clients[user2].server_queue_key, 0777);
 				msgsnd(serv, server, sizeof(server_message), IPC_NOWAIT);
 			}
 		} else {
