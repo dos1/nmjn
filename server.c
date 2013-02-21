@@ -1,6 +1,7 @@
 #include "chat.h"
 
 #include <glib.h>
+#include <glib-unix.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -16,6 +17,7 @@ struct server {
 	int sem_key, sem_id;
 	int msg_key, msg_id;
 	shm_type *repo;
+	GMainLoop *loop;
 } sv;
 
 void log_line(const gchar *format, ...) {
@@ -288,8 +290,6 @@ static gboolean process(gpointer data) {
 		}
 		v(sv.sem_id, CLIENT);
 
-
-
 	}
 
 	g_free(compact);
@@ -300,7 +300,6 @@ static gboolean process(gpointer data) {
 }
 
 int repository_create() {
-	// create new repository
 
 	log_line("Creating new repository...");
 
@@ -350,7 +349,46 @@ int repository_create() {
 	return 0;
 }
 
+
+void repository_detach() {
+
+	if (sv.repo_key==-1) return;
+
+	log_line("Detaching from repository %d...", sv.repo_key);
+
+	int counter = 0;
+	p(sv.sem_id,SERVER);
+	int i;
+	for (i=0; i<MAX_SERVER_COUNT; i++) {
+		if(sv.repo->servers[i].queue_key != -1) counter++;
+		if(sv.repo->servers[i].queue_key == sv.msg_key) sv.repo->servers[i].queue_key = -1;
+	}
+	v(sv.sem_id,SERVER);
+
+	p(sv.sem_id,CLIENT);
+	for (i=0; i<MAX_SERVER_COUNT*MAX_USER_COUNT_PER_SERVER; i++) {
+		if(sv.repo->clients[i].queue_key == -1) continue;
+		if(sv.repo->clients[i].server_queue_key == sv.msg_key) sv.repo->clients[i].queue_key = -1;
+	}
+	v(sv.sem_id,CLIENT);
+
+	shmdt(sv.repo);
+
+	if (counter == 1) {
+		// I was alone...
+		log_line("Noone's left, deleting repository.");
+		shmctl(sv.repo_id, IPC_RMID, 0);
+		semctl(sv.sem_id, 0, IPC_RMID, 0);
+	}
+	msgctl(sv.msg_id, IPC_RMID, 0);
+
+	sv.repo_key = -1;
+
+}
+
 int repository_attach(int key) {
+
+	if (sv.repo_key!=-1) repository_detach();
 	sv.repo_key = key;
 	sv.repo_id = shmget(sv.repo_key, sizeof(shm_type), 0777);
 	if (sv.repo_id == -1){
@@ -372,13 +410,16 @@ int repository_attach(int key) {
 	return 0;
 }
 
-void repository_detach() {
-	shmdt(sv.repo);
+
+gboolean quit(gpointer data) {
+	repository_detach();
+	g_main_loop_quit(sv.loop);
+	return FALSE;
 }
 
 int main(int argc, char** argv){
 
-	GMainLoop *loop = g_main_loop_new(NULL, FALSE);
+	sv.loop = g_main_loop_new(NULL, FALSE);
 
 	log_line("NMJN-server 0.666, launching...");
 
@@ -427,13 +468,10 @@ int main(int argc, char** argv){
 	log_line("Connect clients to %d", sv.msg_key);
 
 	g_idle_add(process, NULL);
-	g_main_loop_run(loop);
+	g_unix_signal_add(SIGINT, quit, NULL);
+	g_main_loop_run(sv.loop);
 
-	// TODO: proper exit handling
-	shmdt(sv.repo);
-	semctl(sv.sem_id, 0, IPC_RMID, 0);
-	msgctl(sv.msg_id, IPC_RMID, 0);
-	shmctl(sv.repo_id, IPC_RMID, 0);
+	log_line("Exiting...");
 	return 0;
 }
 
