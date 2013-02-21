@@ -121,7 +121,6 @@ int getClientByName(char name[16]) {
 }
 
 void deregister(int user) {
-	p(sv.sem_id, CLIENT);
 	if (user>=0) {
 		log_line("Deregistering user %s (%d, room %s), bye bye!", sv.repo->clients[user].name, sv.repo->clients[user].queue_key, sv.repo->clients[user].room);
 		sv.repo->clients[user].queue_key = -1;
@@ -131,7 +130,6 @@ void deregister(int user) {
 	} else {
 		log_line("Tried to deregister non-existent user %d", user);
 	}
-	v(sv.sem_id, CLIENT);
 }
 
 void join(int user, gchar *room) {
@@ -198,7 +196,9 @@ static gboolean process(gpointer data) {
 
 	}	else if( msgrcv(sv.msg_id, compact, sizeof(compact_message), MSG_UNREGISTER, IPC_NOWAIT) != -1 ) {
 		log_line("Got deregister request...");
+		p(sv.sem_id, CLIENT);
 		deregister(getClient(compact->content.value));
+		v(sv.sem_id, CLIENT);
 	}	else if( msgrcv(sv.msg_id, standard, sizeof(standard_message), MSG_JOIN, IPC_NOWAIT) != -1 ) {
 
 		int user = getClientByName(standard->content.sender);
@@ -245,10 +245,10 @@ static gboolean process(gpointer data) {
 			int j=0;
 			for (i=0; i<MAX_SERVER_COUNT*MAX_USER_COUNT_PER_SERVER; i++) {
 				if ((sv.repo->clients[i].queue_key != -1) && (g_strcmp0(sv.repo->clients[i].room, room)==0)) {
+					//log_line("Adding %s (%d) to list of room %s requested by %s (%d)", sv.repo->clients[i].name, i, room, sv.repo->clients[user].name, user);
 					strcpy(list.content.list[j], sv.repo->clients[i].name);
 					j++;
 				}
-				i++;
 			}
 			//log_line("Sending list to user %s...", sv.repo->clients[user].name);
 			v(sv.sem_id, CLIENT);
