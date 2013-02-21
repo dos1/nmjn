@@ -360,8 +360,8 @@ void repository_detach() {
 	p(sv.sem_id,SERVER);
 	int i;
 	for (i=0; i<MAX_SERVER_COUNT; i++) {
-		if(sv.repo->servers[i].queue_key != -1) counter++;
-		if(sv.repo->servers[i].queue_key == sv.msg_key) sv.repo->servers[i].queue_key = -1;
+		if (sv.repo->servers[i].queue_key == sv.msg_key) sv.repo->servers[i].queue_key = -1;
+		else if (sv.repo->servers[i].queue_key != -1) counter++;
 	}
 	v(sv.sem_id,SERVER);
 
@@ -374,7 +374,7 @@ void repository_detach() {
 
 	shmdt(sv.repo);
 
-	if (counter == 1) {
+	if (counter == 0) {
 		// I was alone...
 		log_line("Noone's left, deleting repository.");
 		shmctl(sv.repo_id, IPC_RMID, 0);
