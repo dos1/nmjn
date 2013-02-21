@@ -18,6 +18,8 @@ struct server {
 	int msg_key, msg_id;
 	shm_type *repo;
 	GMainLoop *loop;
+	gboolean heartbeats[MAX_SERVER_COUNT*MAX_USER_COUNT_PER_SERVER];
+	gboolean heartbeats_servers[MAX_SERVER_COUNT];
 } sv;
 
 void p(int semid, int semnum);
@@ -87,6 +89,18 @@ int getClient(int client_key){
 	int i=0;
 	while (i<MAX_SERVER_COUNT*MAX_USER_COUNT_PER_SERVER) {
 		if (sv.repo->clients[i].queue_key == client_key) {
+			return i;
+		}
+		i++;
+	}
+	return -1;
+}
+
+
+int getServer(int key){
+	int i=0;
+	while (i<MAX_SERVER_COUNT) {
+		if (sv.repo->servers[i].queue_key == key) {
 			return i;
 		}
 		i++;
@@ -285,7 +299,22 @@ static gboolean process(gpointer data) {
 		}
 
 		v(sv.sem_id, CLIENT);
-	}	else if( msgrcv(sv.msg_id, server, sizeof(server_message), MSG_SERVER, IPC_NOWAIT) != -1 ){
+	}	else if( msgrcv(sv.msg_id, compact, sizeof(compact_message), MSG_HEARTBEAT, IPC_NOWAIT) != -1 ) {
+		p(sv.sem_id, CLIENT);
+		int user = getUser(compact->content.value);
+		v(sv.sem_id, CLIENT);
+		sv.heartbeats[user]=TRUE;
+	}	else if( msgrcv(sv.msg_id, compact, sizeof(compact_message), MSG_HEARTBEAT_SERVER, IPC_NOWAIT) != -1 ) {
+		p(sv.sem_id, SERVER);
+		int s = getServer(compact->content.value);
+		v(sv.sem_id, SERVER);
+		sv.heartbeats_servers[s]=TRUE;
+		if (s!=-1) {
+			int serv = msgget(compact->content.value, 0777);
+			compact->content.value=sv.msg_key;
+			msgsnd(serv, compact, sizeof(compact_message), IPC_NOWAIT);
+		}
+	}	else if( msgrcv(sv.msg_id, server, sizeof(server_message), MSG_SERVER, IPC_NOWAIT) != -1 ) {
 
 		standard_message standard = server->content.msg;
 		p(sv.sem_id, CLIENT);
@@ -442,6 +471,10 @@ int main(int argc, char** argv){
 
 	sv.repo_key = sv.repo_id = sv.sem_key = sv.sem_id = sv.msg_key = sv.msg_id = -1;
 	sv.repo = NULL;
+
+	int i;
+	for (i=0; i<MAX_SERVER_COUNT*MAX_USER_COUNT_PER_SERVER; i++) sv.heartbeats[i]=FALSE;
+	for (i=0; i<MAX_SERVER_COUNT; i++) sv.heartbeats_servers[i]=FALSE;
 
 	log_line("NMJN-server 0.666, launching...");
 
