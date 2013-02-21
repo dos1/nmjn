@@ -16,6 +16,7 @@ struct server {
 	int repo_key, repo_id;
 	int sem_key, sem_id;
 	int msg_key, msg_id;
+	int serv_id;
 	shm_type *repo;
 	GMainLoop *loop;
 	gboolean heartbeats[MAX_SERVER_COUNT*MAX_USER_COUNT_PER_SERVER];
@@ -155,7 +156,19 @@ void room_msg(standard_message *standard, int user) {
 	}
 }
 
+void repository_detach();
+int repository_attach(int);
+int connection_setup();
+
 static gboolean process(gpointer data) {
+
+	if ((sv.msg_key!=-1) && (sv.repo->servers[sv.serv_id].queue_key!=sv.msg_key)) {
+		log_line("Oops, looks like we got removed!");
+		int repo=sv.repo_key;
+		repository_detach();
+		repository_attach(repo);
+		connection_setup();
+	}
 
 	compact_message *compact = g_malloc(sizeof(compact_message)+50);
 	standard_message *standard = g_malloc(sizeof(standard_message)+50);
@@ -438,7 +451,7 @@ void repository_detach() {
 	}
 	msgctl(sv.msg_id, IPC_RMID, 0);
 
-	sv.repo_key = -1;
+	sv.repo_key = sv.repo_id = sv.sem_key = sv.sem_id = sv.msg_key = sv.msg_id = sv.serv_id = -1;
 
 }
 
@@ -463,9 +476,48 @@ int repository_attach(int key) {
 		log_line("Could not attach to semaphores of repository %d: %s", sv.repo_key, strerror(errno));
 		return repository_create();
 	}
+
 	return 0;
 }
 
+int connection_setup() {
+
+	sv.msg_key = 2048;
+	sv.msg_id = -1;
+	while(sv.msg_id == -1){
+		sv.msg_id = msgget(sv.msg_key, 0777 | IPC_CREAT | IPC_EXCL);
+		sv.msg_key++;
+	}
+	sv.msg_key--;
+
+	{
+		p(sv.sem_id, SERVER);
+
+		int i = 0;
+		while ((i<MAX_SERVER_COUNT) && (sv.repo->servers[i].queue_key != -1)) {
+			i++;
+		}
+		if (i<MAX_SERVER_COUNT) {
+			sv.repo->servers[i].queue_key = sv.msg_key;
+			sv.serv_id=i;
+		} else {
+			log_line("Oh noes, there's no place for us here!");
+			v(sv.sem_id, SERVER);
+			repository_detach();
+			if (repository_create()) return 1;
+			p(sv.sem_id, SERVER);
+			sv.repo->servers[0].queue_key = sv.msg_key;
+			sv.serv_id=0;
+		}
+
+		v(sv.sem_id, SERVER);
+	}
+
+	log_line("Alive and kicking.");
+	log_line("Connect more servers to %d", sv.repo_key);
+	log_line("Connect clients to %d", sv.msg_key);
+	return 0;
+}
 
 gboolean quit(gpointer data) {
 	repository_detach();
@@ -526,7 +578,7 @@ int main(int argc, char** argv){
 
 	sv.loop = g_main_loop_new(NULL, FALSE);
 
-	sv.repo_key = sv.repo_id = sv.sem_key = sv.sem_id = sv.msg_key = sv.msg_id = -1;
+	sv.repo_key = sv.repo_id = sv.sem_key = sv.sem_id = sv.msg_key = sv.msg_id = sv.serv_id = -1;
 	sv.repo = NULL;
 
 	int i;
@@ -540,39 +592,7 @@ int main(int argc, char** argv){
 	} else {
 		if (repository_attach(atoi(argv[1]))) return 1;
 	}
-
-	sv.msg_key = 2048;
-	sv.msg_id = -1;
-	while(sv.msg_id == -1){
-		sv.msg_id = msgget(sv.msg_key, 0777 | IPC_CREAT | IPC_EXCL);
-		sv.msg_key++;
-	}
-	sv.msg_key--;
-
-	{
-		p(sv.sem_id, SERVER);
-
-		int i = 0;
-		while ((i<MAX_SERVER_COUNT) && (sv.repo->servers[i].queue_key != -1)) {
-			i++;
-		}
-		if (i<MAX_SERVER_COUNT) {
-			sv.repo->servers[i].queue_key = sv.msg_key;
-		} else {
-			log_line("Oh noes, there's no place for us here!");
-			v(sv.sem_id, SERVER);
-			repository_detach();
-			if (repository_create()) return 1;
-			p(sv.sem_id, SERVER);
-			sv.repo->servers[0].queue_key = sv.msg_key;
-		}
-
-		v(sv.sem_id, SERVER);
-	}
-
-	log_line("Alive and kicking.");
-	log_line("Connect more servers to %d", sv.repo_key);
-	log_line("Connect clients to %d", sv.msg_key);
+	if (connection_setup()) return 1;
 
 	g_idle_add(process, NULL);
 	g_timeout_add_seconds(5, heartbeat, NULL);
