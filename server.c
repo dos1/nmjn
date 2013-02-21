@@ -312,12 +312,12 @@ static gboolean process(gpointer data) {
 				msgsnd(serv, server, sizeof(server_message), IPC_NOWAIT);
 			}
 		} else {
-			log_line("Could not send PM [%d to %d]", user, user2);
+			log_line("Could not send PM [%s (%d) to %s (%d)]", standard->content.sender, user, standard->content.recipient, user2);
 		}
 
 		v(sv.sem_id, CLIENT);
 	}	else if( msgrcv(sv.msg_id, compact, sizeof(compact_message), MSG_HEARTBEAT, IPC_NOWAIT) != -1 ) {
-		//log_line("Heartbeat from user %d", compact->content.value);
+		g_print("Heartbeat from user %d\n", compact->content.value);
 		p(sv.sem_id, CLIENT);
 		int user = getClient(compact->content.value);
 		v(sv.sem_id, CLIENT);
@@ -325,7 +325,7 @@ static gboolean process(gpointer data) {
 			sv.heartbeats[user]=TRUE;
 		}
 	}	else if( msgrcv(sv.msg_id, compact, sizeof(compact_message), MSG_HEARTBEAT_SERVER, IPC_NOWAIT) != -1 ) {
-		//log_line("Heartbeat from server %d", compact->content.value);
+		g_print("Heartbeat from server %d\n", compact->content.value);
 		p(sv.sem_id, SERVER);
 		int s = getServer(compact->content.value);
 		v(sv.sem_id, SERVER);
