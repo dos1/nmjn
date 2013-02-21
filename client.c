@@ -69,8 +69,7 @@ void display_line(GtkTextView *textview, const gchar *format, ...) {
 	{
 		char timebuf[64];
 		time_t     now = time(NULL);
-		struct tm *tstruct = localtime(&now);
-		strftime(timebuf, sizeof(struct tm), "%H:%M:%S", tstruct);
+		strftime(timebuf, 64, "%H:%M:%S", localtime(&now));
 
 		g_snprintf(buf, 1024, "[%s] %s\n", timebuf, text);
 	}

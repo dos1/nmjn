@@ -20,6 +20,9 @@ struct server {
 	GMainLoop *loop;
 } sv;
 
+void p(int semid, int semnum);
+void v(int semid, int semnum);
+
 void log_line(const gchar *format, ...) {
 	va_list vl;
 	va_start(vl, format);
@@ -32,14 +35,30 @@ void log_line(const gchar *format, ...) {
 	{
 		char timebuf[64];
 		time_t     now = time(NULL);
-		struct tm *tstruct = localtime(&now);
-		strftime(timebuf, sizeof(struct tm), "%H:%M:%S", tstruct);
+		strftime(timebuf, 64, "%Y-%m-%dT%H:%M:%S%z", localtime(&now));
 
-		g_snprintf(buf, 1024, "[%s] %s\n", timebuf, text);
+		g_snprintf(buf, 1024, "%s [%d] [dos] %s\n", timebuf, sv.msg_key, text);
 	}
 
 	g_print("%s", buf);
 
+	if (sv.repo_key!=-1) {
+		p(sv.sem_id, LOG);
+		int fd = open(LOGFILE, O_WRONLY | O_CREAT, 0777);
+		if	(fd != -1) {
+			if (lseek(fd,0,SEEK_END) != -1) {
+				if (write(fd,buf,strlen(buf)) == -1){
+					g_print("Could not write to log file!\n");
+				}
+			} else {
+				g_print("Could not seek log file!\n");
+			}
+			close(fd);
+		} else {
+			g_print("Could not open log file!\n");
+		}
+		v(sv.sem_id,LOG);
+	}
 }
 
 void p(int semid, int semnum) {
@@ -421,18 +440,16 @@ int main(int argc, char** argv){
 
 	sv.loop = g_main_loop_new(NULL, FALSE);
 
-	log_line("NMJN-server 0.666, launching...");
-
 	sv.repo_key = sv.repo_id = sv.sem_key = sv.sem_id = sv.msg_key = sv.msg_id = -1;
 	sv.repo = NULL;
+
+	log_line("NMJN-server 0.666, launching...");
 
 	if (argc<2) {
 		if (repository_create()) return 1;
 	} else {
 		if (repository_attach(atoi(argv[1]))) return 1;
 	}
-
-	//create a server msg queue
 
 	sv.msg_key = 2048;
 	sv.msg_id = -1;
