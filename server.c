@@ -289,7 +289,7 @@ static gboolean process(gpointer data) {
 		int user2 = getClientByName(standard->content.recipient);
 
 		if ((user!=-1) && (user2!=-1)) {
-			if (sv.repo->clients[user].server_queue_key == sv.msg_key) {
+			if (sv.repo->clients[user2].server_queue_key == sv.msg_key) {
 				log_line("Sending PM from %s to %s", standard->content.sender, standard->content.recipient);
 				int client = msgget(sv.repo->clients[user2].queue_key, 0777);
 				msgsnd(client, standard, sizeof(standard_message), IPC_NOWAIT);
@@ -424,7 +424,7 @@ void repository_detach() {
 	p(sv.sem_id,CLIENT);
 	for (i=0; i<MAX_SERVER_COUNT*MAX_USER_COUNT_PER_SERVER; i++) {
 		if(sv.repo->clients[i].queue_key == -1) continue;
-		if(sv.repo->clients[i].server_queue_key == sv.msg_key) sv.repo->clients[i].queue_key = -1;
+		if(sv.repo->clients[i].server_queue_key == sv.msg_key) deregister(i);
 	}
 	v(sv.sem_id,CLIENT);
 
@@ -484,8 +484,7 @@ gboolean heartbeat(gpointer data) {
 				int j=0;
 				while (j<MAX_SERVER_COUNT*MAX_USER_COUNT_PER_SERVER) {
 					if (sv.repo->clients[j].server_queue_key==sv.repo->servers[i].queue_key) {
-						sv.repo->clients[j].queue_key=-1;
-						log_line("Deleted client %s from server %d", sv.repo->clients[j].name, i);
+						deregister(j);
 					}
 					j++;
 				}
