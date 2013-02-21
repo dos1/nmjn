@@ -192,6 +192,10 @@ static gboolean process(gpointer data) {
 		compact->content.value = error;
 		msgsnd(client, compact, sizeof(compact_message), IPC_NOWAIT);
 
+		compact->content.value = -1;
+		compact->type=MSG_HEARTBEAT;
+		msgsnd(client, compact, sizeof(compact_message), IPC_NOWAIT);
+
 	}	else if( msgrcv(sv.msg_id, compact, sizeof(compact_message), MSG_UNREGISTER, IPC_NOWAIT) != -1 ) {
 		log_line("Got deregister request...");
 		deregister(getClient(compact->content.value));
@@ -300,11 +304,15 @@ static gboolean process(gpointer data) {
 
 		v(sv.sem_id, CLIENT);
 	}	else if( msgrcv(sv.msg_id, compact, sizeof(compact_message), MSG_HEARTBEAT, IPC_NOWAIT) != -1 ) {
+		//log_line("Heartbeat from user %d", compact->content.value);
 		p(sv.sem_id, CLIENT);
-		int user = getUser(compact->content.value);
+		int user = getClient(compact->content.value);
 		v(sv.sem_id, CLIENT);
-		sv.heartbeats[user]=TRUE;
+		if (user!=-1) {
+			sv.heartbeats[user]=TRUE;
+		}
 	}	else if( msgrcv(sv.msg_id, compact, sizeof(compact_message), MSG_HEARTBEAT_SERVER, IPC_NOWAIT) != -1 ) {
+		//log_line("Heartbeat from server %d", compact->content.value);
 		p(sv.sem_id, SERVER);
 		int s = getServer(compact->content.value);
 		v(sv.sem_id, SERVER);
@@ -465,6 +473,56 @@ gboolean quit(gpointer data) {
 	return FALSE;
 }
 
+gboolean heartbeat(gpointer data) {
+	int i=0;
+	p(sv.sem_id, SERVER);
+	while (i<MAX_SERVER_COUNT) {
+		if ((sv.repo->servers[i].queue_key!=-1) && (sv.repo->servers[i].queue_key!=sv.msg_key)) {
+			if (sv.heartbeats_servers[i]==FALSE) {
+				log_line("Server %d does not respond to heartbeats!", i);
+				p(sv.sem_id, CLIENT);
+				int j=0;
+				while (j<MAX_SERVER_COUNT*MAX_USER_COUNT_PER_SERVER) {
+					if (sv.repo->clients[j].server_queue_key==sv.repo->servers[i].queue_key) {
+						sv.repo->clients[j].queue_key=-1;
+						log_line("Deleted client %s from server %d", sv.repo->clients[j].name, i);
+					}
+					j++;
+				}
+				v(sv.sem_id, CLIENT);
+				sv.repo->servers[i].queue_key=-1;
+				log_line("Deleted server %d.", i);
+			} else {
+				sv.heartbeats_servers[i]=FALSE;
+			}
+		}
+		i++;
+	}
+	v(sv.sem_id, SERVER);
+
+	i=0;
+	p(sv.sem_id, CLIENT);
+	while (i<MAX_SERVER_COUNT*MAX_USER_COUNT_PER_SERVER) {
+		if ((sv.repo->clients[i].queue_key!=-1) && (sv.repo->clients[i].server_queue_key == sv.msg_key)) {
+			if (sv.heartbeats[i]==FALSE) {
+				log_line("Client %d does not respond to heartbeats!", i);
+				deregister(i);
+			} else {
+				sv.heartbeats[i]=FALSE;
+				compact_message compact;
+				compact.content.value = -1;
+				compact.type=MSG_HEARTBEAT;
+				int client = msgget(sv.repo->clients[i].queue_key, 0777);
+				msgsnd(client, &compact, sizeof(compact_message), IPC_NOWAIT);
+			}
+		}
+		i++;
+	}
+	v(sv.sem_id, CLIENT);
+
+	return TRUE;
+}
+
 int main(int argc, char** argv){
 
 	sv.loop = g_main_loop_new(NULL, FALSE);
@@ -473,8 +531,8 @@ int main(int argc, char** argv){
 	sv.repo = NULL;
 
 	int i;
-	for (i=0; i<MAX_SERVER_COUNT*MAX_USER_COUNT_PER_SERVER; i++) sv.heartbeats[i]=FALSE;
-	for (i=0; i<MAX_SERVER_COUNT; i++) sv.heartbeats_servers[i]=FALSE;
+	for (i=0; i<MAX_SERVER_COUNT*MAX_USER_COUNT_PER_SERVER; i++) sv.heartbeats[i]=TRUE;
+	for (i=0; i<MAX_SERVER_COUNT; i++) sv.heartbeats_servers[i]=TRUE;
 
 	log_line("NMJN-server 0.666, launching...");
 
@@ -518,6 +576,7 @@ int main(int argc, char** argv){
 	log_line("Connect clients to %d", sv.msg_key);
 
 	g_idle_add(process, NULL);
+	g_timeout_add_seconds(5, heartbeat, NULL);
 	g_unix_signal_add(SIGINT, quit, NULL);
 	g_main_loop_run(sv.loop);
 
